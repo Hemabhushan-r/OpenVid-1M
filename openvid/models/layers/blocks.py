@@ -26,7 +26,8 @@ from openvid.acceleration.communications import all_to_all, split_forward_gather
 from openvid.acceleration.parallel_states import get_sequence_parallel_group
 import ipdb
 
-approx_gelu = lambda: nn.GELU(approximate="tanh")
+
+def approx_gelu(): return nn.GELU(approximate="tanh")
 
 
 class LlamaRMSNorm(nn.Module):
@@ -39,12 +40,13 @@ class LlamaRMSNorm(nn.Module):
         self.variance_epsilon = eps
 
     def forward(self, hidden_states):
-        #ipdb.set_trace()
+        # ipdb.set_trace()
         input_dtype = hidden_states.dtype
         hidden_states = hidden_states.to(torch.float32)
         variance = hidden_states.pow(2).mean(-1, keepdim=True)
-        hidden_states = hidden_states * torch.rsqrt(variance + self.variance_epsilon)
-        #ipdb.set_trace()
+        hidden_states = hidden_states * \
+            torch.rsqrt(variance + self.variance_epsilon)
+        # ipdb.set_trace()
         return self.weight * hidden_states.to(input_dtype)
 
 
@@ -55,7 +57,8 @@ def get_layernorm(hidden_size: torch.Tensor, eps: float, affine: bool, use_kerne
 
             return FusedLayerNorm(hidden_size, elementwise_affine=affine, eps=eps)
         except ImportError:
-            raise RuntimeError("FusedLayerNorm not available. Please install apex.")
+            raise RuntimeError(
+                "FusedLayerNorm not available. Please install apex.")
     else:
         return nn.LayerNorm(hidden_size, eps, elementwise_affine=affine)
 
@@ -103,7 +106,8 @@ class PatchEmbed3D(nn.Module):
         self.in_chans = in_chans
         self.embed_dim = embed_dim
 
-        self.proj = nn.Conv3d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv3d(in_chans, embed_dim,
+                              kernel_size=patch_size, stride=patch_size)
         if norm_layer is not None:
             self.norm = norm_layer(embed_dim)
         else:
@@ -116,9 +120,11 @@ class PatchEmbed3D(nn.Module):
         if W % self.patch_size[2] != 0:
             x = F.pad(x, (0, self.patch_size[2] - W % self.patch_size[2]))
         if H % self.patch_size[1] != 0:
-            x = F.pad(x, (0, 0, 0, self.patch_size[1] - H % self.patch_size[1]))
+            x = F.pad(
+                x, (0, 0, 0, self.patch_size[1] - H % self.patch_size[1]))
         if D % self.patch_size[0] != 0:
-            x = F.pad(x, (0, 0, 0, 0, 0, self.patch_size[0] - D % self.patch_size[0]))
+            x = F.pad(
+                x, (0, 0, 0, 0, 0, self.patch_size[0] - D % self.patch_size[0]))
 
         x = self.proj(x)  # (B C T H W)
         if self.norm is not None:
@@ -233,8 +239,9 @@ class MaskedSelfAttention(nn.Module):
         qkv = qkv.view(qkv_shape).permute(qkv_permute_shape)
         q, k, v = qkv.unbind(0)  # B H N C
         q, k = self.q_norm(q), self.k_norm(k)
-        
-        mask = mask.unsqueeze(1).unsqueeze(1).repeat(1, self.num_heads, 1, 1).to(torch.float32)  # B H 1 N
+
+        mask = mask.unsqueeze(1).unsqueeze(1).repeat(
+            1, self.num_heads, 1, 1).to(torch.float32)  # B H 1 N
         dtype = q.dtype
         q = q * self.scale
         attn = q @ k.transpose(-2, -1)
@@ -290,9 +297,11 @@ class SeqParallelAttention(Attention):
         qkv = all_to_all(qkv, sp_group, scatter_dim=3, gather_dim=1)
 
         if self.enable_flashattn:
-            qkv_permute_shape = (2, 0, 1, 3, 4)  # [3, B, N, NUM_HEAD_PER_DEVICE, HEAD_DIM]
+            # [3, B, N, NUM_HEAD_PER_DEVICE, HEAD_DIM]
+            qkv_permute_shape = (2, 0, 1, 3, 4)
         else:
-            qkv_permute_shape = (2, 0, 3, 1, 4)  # [3, B, NUM_HEAD_PER_DEVICE, N, HEAD_DIM]
+            # [3, B, NUM_HEAD_PER_DEVICE, N, HEAD_DIM]
+            qkv_permute_shape = (2, 0, 3, 1, 4)
         qkv = qkv.permute(qkv_permute_shape)
 
         q, k, v = qkv.unbind(0)
@@ -355,13 +364,15 @@ class MultiHeadCrossAttention(nn.Module):
         kv = self.kv_linear(cond).view(1, -1, 2, self.num_heads, self.head_dim)
         k, v = kv.unbind(2)
 
-        #ipdb.set_trace()
+        # ipdb.set_trace()
 
         attn_bias = None
         if mask is not None:
-            attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
-        x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
-        #ipdb.set_trace()
+            attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([
+                                                                         N] * B, mask)
+        x = xformers.ops.memory_efficient_attention(
+            q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+        # ipdb.set_trace()
 
         x = x.view(B, -1, C)
         x = self.proj(x)
@@ -394,11 +405,13 @@ class MaskedMultiHeadCrossAttention(nn.Module):
 
         attn_bias = None
         if mask is not None:
-            attn_bias = mask.unsqueeze(1).unsqueeze(1).repeat(1, self.num_heads, S, 1).to(q.dtype) # B H S L
+            attn_bias = mask.unsqueeze(1).unsqueeze(1).repeat(
+                1, self.num_heads, S, 1).to(q.dtype)  # B H S L
             exp = -1e9
-            attn_bias[attn_bias==0] = exp
-            attn_bias[attn_bias==1] = 0
-        x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+            attn_bias[attn_bias == 0] = exp
+            attn_bias[attn_bias == 1] = 0
+        x = xformers.ops.memory_efficient_attention(
+            q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
 
         x = x.view(B, -1, C)
         x = self.proj(x)
@@ -414,7 +427,8 @@ class SeqParallelMultiHeadCrossAttention(MultiHeadCrossAttention):
         attn_drop=0.0,
         proj_drop=0.0,
     ):
-        super().__init__(d_model=d_model, num_heads=num_heads, attn_drop=attn_drop, proj_drop=proj_drop)
+        super().__init__(d_model=d_model, num_heads=num_heads,
+                         attn_drop=attn_drop, proj_drop=proj_drop)
 
     def forward(self, x, cond, mask=None):
         # query/value: img tokens; key: condition; mask: if padding tokens
@@ -432,8 +446,10 @@ class SeqParallelMultiHeadCrossAttention(MultiHeadCrossAttention):
         # apply all_to_all to gather sequence and split attention heads
         q = all_to_all(q, sp_group, scatter_dim=2, gather_dim=1)
 
-        k = split_forward_gather_backward(k, get_sequence_parallel_group(), dim=2, grad_scale="down")
-        v = split_forward_gather_backward(v, get_sequence_parallel_group(), dim=2, grad_scale="down")
+        k = split_forward_gather_backward(
+            k, get_sequence_parallel_group(), dim=2, grad_scale="down")
+        v = split_forward_gather_backward(
+            v, get_sequence_parallel_group(), dim=2, grad_scale="down")
 
         q = q.view(1, -1, self.num_heads // sp_size, self.head_dim)
         k = k.view(1, -1, self.num_heads // sp_size, self.head_dim)
@@ -442,9 +458,11 @@ class SeqParallelMultiHeadCrossAttention(MultiHeadCrossAttention):
         # compute attention
         attn_bias = None
         if mask is not None:
-            attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([N] * B, mask)
-        x = xformers.ops.memory_efficient_attention(q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
-        
+            attn_bias = xformers.ops.fmha.BlockDiagonalMask.from_seqlens([
+                                                                         N] * B, mask)
+        x = xformers.ops.memory_efficient_attention(
+            q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
+
         # apply all to all to gather back attention heads and scatter sequence
         x = x.view(B, -1, self.num_heads // sp_size, self.head_dim)
         x = all_to_all(x, sp_group, scatter_dim=1, gather_dim=2)
@@ -463,9 +481,12 @@ class FinalLayer(nn.Module):
 
     def __init__(self, hidden_size, num_patch, out_channels):
         super().__init__()
-        self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.linear = nn.Linear(hidden_size, num_patch * out_channels, bias=True)
-        self.adaLN_modulation = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 2 * hidden_size, bias=True))
+        self.norm_final = nn.LayerNorm(
+            hidden_size, elementwise_affine=False, eps=1e-6)
+        self.linear = nn.Linear(
+            hidden_size, num_patch * out_channels, bias=True)
+        self.adaLN_modulation = nn.Sequential(
+            nn.SiLU(), nn.Linear(hidden_size, 2 * hidden_size, bias=True))
 
     def forward(self, x, c):
         shift, scale = self.adaLN_modulation(c).chunk(2, dim=1)
@@ -481,13 +502,17 @@ class T2IFinalLayer(nn.Module):
 
     def __init__(self, hidden_size, num_patch, out_channels):
         super().__init__()
-        self.norm_final = nn.LayerNorm(hidden_size, elementwise_affine=False, eps=1e-6)
-        self.linear = nn.Linear(hidden_size, num_patch * out_channels, bias=True)
-        self.scale_shift_table = nn.Parameter(torch.randn(2, hidden_size) / hidden_size**0.5)
+        self.norm_final = nn.LayerNorm(
+            hidden_size, elementwise_affine=False, eps=1e-6)
+        self.linear = nn.Linear(
+            hidden_size, num_patch * out_channels, bias=True)
+        self.scale_shift_table = nn.Parameter(
+            torch.randn(2, hidden_size) / hidden_size**0.5)
         self.out_channels = out_channels
 
     def forward(self, x, t):
-        shift, scale = (self.scale_shift_table[None] + t[:, None]).chunk(2, dim=1)
+        shift, scale = (
+            self.scale_shift_table[None] + t[:, None]).chunk(2, dim=1)
         x = t2i_modulate(self.norm_final(x), shift, scale)
         x = self.linear(x)
         return x
@@ -524,12 +549,14 @@ class TimestepEmbedder(nn.Module):
         """
         # https://github.com/openai/glide-text2im/blob/main/glide_text2im/nn.py
         half = dim // 2
-        freqs = torch.exp(-math.log(max_period) * torch.arange(start=0, end=half, dtype=torch.float32) / half)
+        freqs = torch.exp(-math.log(max_period) *
+                          torch.arange(start=0, end=half, dtype=torch.float32) / half)
         freqs = freqs.to(device=t.device)
         args = t[:, None].float() * freqs[None]
         embedding = torch.cat([torch.cos(args), torch.sin(args)], dim=-1)
         if dim % 2:
-            embedding = torch.cat([embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
+            embedding = torch.cat(
+                [embedding, torch.zeros_like(embedding[:, :1])], dim=-1)
         return embedding
 
     def forward(self, t, dtype):
@@ -548,7 +575,8 @@ class LabelEmbedder(nn.Module):
     def __init__(self, num_classes, hidden_size, dropout_prob):
         super().__init__()
         use_cfg_embedding = dropout_prob > 0
-        self.embedding_table = nn.Embedding(num_classes + use_cfg_embedding, hidden_size)
+        self.embedding_table = nn.Embedding(
+            num_classes + use_cfg_embedding, hidden_size)
         self.num_classes = num_classes
         self.dropout_prob = dropout_prob
 
@@ -557,7 +585,9 @@ class LabelEmbedder(nn.Module):
         Drops labels to enable classifier-free guidance.
         """
         if force_drop_ids is None:
-            drop_ids = torch.rand(labels.shape[0]).cuda() < self.dropout_prob
+            # drop_ids = torch.rand(labels.shape[0]).cuda() < self.dropout_prob
+            drop_ids = torch.rand(
+                labels.shape[0], device=labels.device, dtype=labels.dtype) < self.dropout_prob
         else:
             drop_ids = force_drop_ids == 1
         labels = torch.where(drop_ids, self.num_classes, labels)
@@ -576,7 +606,8 @@ class SizeEmbedder(TimestepEmbedder):
     """
 
     def __init__(self, hidden_size, frequency_embedding_size=256):
-        super().__init__(hidden_size=hidden_size, frequency_embedding_size=frequency_embedding_size)
+        super().__init__(hidden_size=hidden_size,
+                         frequency_embedding_size=frequency_embedding_size)
         self.mlp = nn.Sequential(
             nn.Linear(frequency_embedding_size, hidden_size, bias=True),
             nn.SiLU(),
@@ -594,9 +625,11 @@ class SizeEmbedder(TimestepEmbedder):
             assert s.shape[0] == bs
         b, dims = s.shape[0], s.shape[1]
         s = rearrange(s, "b d -> (b d)")
-        s_freq = self.timestep_embedding(s, self.frequency_embedding_size).to(self.dtype)
+        s_freq = self.timestep_embedding(
+            s, self.frequency_embedding_size).to(self.dtype)
         s_emb = self.mlp(s_freq)
-        s_emb = rearrange(s_emb, "(b d) d2 -> b (d d2)", b=b, d=dims, d2=self.outdim)
+        s_emb = rearrange(s_emb, "(b d) d2 -> b (d d2)",
+                          b=b, d=dims, d2=self.outdim)
         return s_emb
 
     @property
@@ -614,7 +647,8 @@ class CaptionEmbedder(nn.Module):
         self.y_proj = Mlp(
             in_features=in_channels, hidden_features=hidden_size, out_features=hidden_size, act_layer=act_layer, drop=0
         )
-        self.register_buffer("y_embedding", nn.Parameter(torch.randn(token_num, in_channels) / in_channels**0.5))
+        self.register_buffer("y_embedding", nn.Parameter(
+            torch.randn(token_num, in_channels) / in_channels**0.5))
         self.uncond_prob = uncond_prob
 
     def token_drop(self, caption, force_drop_ids=None):
@@ -622,10 +656,13 @@ class CaptionEmbedder(nn.Module):
         Drops labels to enable classifier-free guidance.
         """
         if force_drop_ids is None:
-            drop_ids = torch.rand(caption.shape[0]).cuda() < self.uncond_prob
+            # drop_ids = torch.rand(caption.shape[0]).cuda() < self.uncond_prob
+            drop_ids = torch.rand(
+                caption.shape[0], device=caption.device, dtype=caption.dtype) < self.uncond_prob
         else:
             drop_ids = force_drop_ids == 1
-        caption = torch.where(drop_ids[:, None, None, None], self.y_embedding, caption)
+        caption = torch.where(
+            drop_ids[:, None, None, None], self.y_embedding, caption)
         return caption
 
     def forward(self, caption, train, force_drop_ids=None):
@@ -664,7 +701,8 @@ def get_2d_sincos_pos_embed(embed_dim, grid_size, cls_token=False, extra_tokens=
     grid = grid.reshape([2, 1, grid_size[1], grid_size[0]])
     pos_embed = get_2d_sincos_pos_embed_from_grid(embed_dim, grid)
     if cls_token and extra_tokens > 0:
-        pos_embed = np.concatenate([np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
+        pos_embed = np.concatenate(
+            [np.zeros([extra_tokens, embed_dim]), pos_embed], axis=0)
     return pos_embed
 
 
@@ -672,8 +710,10 @@ def get_2d_sincos_pos_embed_from_grid(embed_dim, grid):
     assert embed_dim % 2 == 0
 
     # use half of dimensions to encode grid_h
-    emb_h = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[0])  # (H*W, D/2)
-    emb_w = get_1d_sincos_pos_embed_from_grid(embed_dim // 2, grid[1])  # (H*W, D/2)
+    emb_h = get_1d_sincos_pos_embed_from_grid(
+        embed_dim // 2, grid[0])  # (H*W, D/2)
+    emb_w = get_1d_sincos_pos_embed_from_grid(
+        embed_dim // 2, grid[1])  # (H*W, D/2)
 
     emb = np.concatenate([emb_h, emb_w], axis=1)  # (H*W, D)
     return emb
