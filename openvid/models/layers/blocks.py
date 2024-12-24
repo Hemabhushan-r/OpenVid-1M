@@ -454,8 +454,10 @@ class MaskedMultiHeadCrossAttention(nn.Module):
             attn_bias = mask.unsqueeze(1).unsqueeze(1).repeat(
                 1, self.num_heads, S, 1).to(q.dtype)  # B H S L
             exp = -1e9
-            attn_bias[attn_bias == 0] = exp
-            attn_bias[attn_bias == 1] = 0
+            attn_bias.masked_fill_(attn_bias == 0, exp)
+            attn_bias.masked_fill_(attn_bias == 1, 0)
+            # attn_bias[attn_bias == 0] = exp
+            # attn_bias[attn_bias == 1] = 0
         # x = xformers.ops.memory_efficient_attention(
         #     q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
 
