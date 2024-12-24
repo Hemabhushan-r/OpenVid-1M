@@ -802,8 +802,7 @@ class GaussianDiffusion:
                 ModelMeanType.EPSILON: noise,  # here
             }[self.model_mean_type]
             assert model_output.shape == target.shape == x_start.shape
-            # terms["mse"] = mean_flat((target - model_output) ** 2)
-            terms["mse"] = F.mse_loss(model_output, target)
+            terms["mse"] = mean_flat((target - model_output) ** 2)
             # ipdb.set_trace()
             if "vb" in terms:
                 terms["loss"] = terms["mse"] + terms["vb"]
