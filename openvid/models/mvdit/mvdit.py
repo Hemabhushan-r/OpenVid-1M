@@ -56,10 +56,14 @@ class MVDiTBlock(nn.Module):
             self.attn_cls = Attention
             self.mha_cls = MaskedMultiHeadCrossAttention
 
-        self.norm1 = get_layernorm(hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
-        self.norm1_y = get_layernorm(hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
-        self.norm2 = get_layernorm(hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
-        self.norm2_y = get_layernorm(hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
+        self.norm1 = get_layernorm(
+            hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
+        self.norm1_y = get_layernorm(
+            hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
+        self.norm2 = get_layernorm(
+            hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
+        self.norm2_y = get_layernorm(
+            hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
         self.attn = self.self_masked_attn(
             hidden_size,
             num_heads=num_heads,
@@ -67,19 +71,26 @@ class MVDiTBlock(nn.Module):
             enable_flashattn=enable_flashattn,
         )
         self.cross_attn = self.mha_cls(hidden_size, num_heads)
-        self.norm3 = get_layernorm(hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
-        self.norm3_y = get_layernorm(hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
+        self.norm3 = get_layernorm(
+            hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
+        self.norm3_y = get_layernorm(
+            hidden_size, eps=1e-6, affine=False, use_kernel=enable_layernorm_kernel)
         self.mlp = Mlp(
             in_features=hidden_size, hidden_features=int(hidden_size * mlp_ratio), act_layer=approx_gelu, drop=0
         )
         self.mlp_y = Mlp(
             in_features=hidden_size, hidden_features=int(hidden_size * mlp_ratio), act_layer=approx_gelu, drop=0
         )
-        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
-        self.scale_shift_table = nn.Parameter(torch.randn(6, hidden_size) / hidden_size**0.5)
-        self.scale_shift_table_y = nn.Parameter(torch.randn(6, hidden_size) / hidden_size**0.5)
-        self.scale_shift_table_temp = nn.Parameter(torch.randn(3, hidden_size) / hidden_size**0.5)
-        self.scale_shift_table_y_temp = nn.Parameter(torch.randn(3, hidden_size) / hidden_size**0.5)
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0.0 else nn.Identity()
+        self.scale_shift_table = nn.Parameter(
+            torch.randn(6, hidden_size) / hidden_size**0.5)
+        self.scale_shift_table_y = nn.Parameter(
+            torch.randn(6, hidden_size) / hidden_size**0.5)
+        self.scale_shift_table_temp = nn.Parameter(
+            torch.randn(3, hidden_size) / hidden_size**0.5)
+        self.scale_shift_table_y_temp = nn.Parameter(
+            torch.randn(3, hidden_size) / hidden_size**0.5)
 
         # temporal attention
         self.d_s = d_s
@@ -102,7 +113,8 @@ class MVDiTBlock(nn.Module):
         B, N, C = x.shape
         L = y.shape[2]  # y: B T L C, mask: B T L
         x = rearrange(x, "B (T S) C -> B T S C", T=self.d_t, S=self.d_s)
-        x_mask = torch.ones(x.shape[:3], device=x.device, dtype=x.dtype)  # B T S
+        x_mask = torch.ones(
+            x.shape[:3], device=x.device, dtype=x.dtype)  # B T S
 
         shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = (
             self.scale_shift_table[None] + t.reshape(B, 6, -1)
@@ -136,7 +148,7 @@ class MVDiTBlock(nn.Module):
         y_s = rearrange(y_s, "B T L C -> B (T L) C")
         x = x + self.drop_path(gate_msa * x_s)
         y = y + self.drop_path(gate_msa_y * y_s)
-        
+
         x_t = t2i_modulate(self.norm2(x), shift_msa_temp, scale_msa_temp)
         y_t = t2i_modulate(self.norm2_y(y), shift_msa_y_temp, scale_msa_y_temp)
         x_t = rearrange(x_t, "B (T S) C -> B T S C", T=self.d_t, S=self.d_s)
@@ -164,8 +176,11 @@ class MVDiTBlock(nn.Module):
         x = rearrange(x, "(B T) S C -> B (T S) C", B=B, T=self.d_t)
         y = rearrange(y, "(B T) L C -> B (T L) C", B=B, T=self.d_t)
         # mlp
-        x = x + self.drop_path(gate_mlp * self.mlp(t2i_modulate(self.norm3(x), shift_mlp, scale_mlp)))
-        y = y + self.drop_path(gate_mlp_y * self.mlp_y(t2i_modulate(self.norm3_y(y), shift_mlp_y, scale_mlp_y)))
+        x = x + \
+            self.drop_path(
+                gate_mlp * self.mlp(t2i_modulate(self.norm3(x), shift_mlp, scale_mlp)))
+        y = y + self.drop_path(gate_mlp_y * self.mlp_y(
+            t2i_modulate(self.norm3_y(y), shift_mlp_y, scale_mlp_y)))
 
         y = rearrange(y, "B (T L) C -> B T L C", T=self.d_t, L=L)
 
@@ -204,7 +219,8 @@ class MVDiT(nn.Module):
         self.hidden_size = hidden_size
         self.patch_size = patch_size
         self.input_size = input_size
-        num_patches = np.prod([input_size[i] // patch_size[i] for i in range(3)])
+        num_patches = np.prod([input_size[i] // patch_size[i]
+                              for i in range(3)])
         self.num_patches = num_patches
         self.num_temporal = input_size[0] // patch_size[0]
         self.num_spatial = num_patches // self.num_temporal
@@ -219,14 +235,19 @@ class MVDiT(nn.Module):
         self.time_scale = time_scale
 
         self.register_buffer("pos_embed", self.get_spatial_pos_embed())
-        self.register_buffer("pos_embed_temporal", self.get_temporal_pos_embed())
+        self.register_buffer("pos_embed_temporal",
+                             self.get_temporal_pos_embed())
 
         self.x_embedder = PatchEmbed3D(patch_size, in_channels, hidden_size)
         self.t_embedder = TimestepEmbedder(hidden_size)
-        self.t_block = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 6 * hidden_size, bias=True))
-        self.t_block_y = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 6 * hidden_size, bias=True))
-        self.t_block_temp = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 3 * hidden_size, bias=True))
-        self.t_block_y_temp = nn.Sequential(nn.SiLU(), nn.Linear(hidden_size, 3 * hidden_size, bias=True))
+        self.t_block = nn.Sequential(nn.SiLU(), nn.Linear(
+            hidden_size, 6 * hidden_size, bias=True))
+        self.t_block_y = nn.Sequential(nn.SiLU(), nn.Linear(
+            hidden_size, 6 * hidden_size, bias=True))
+        self.t_block_temp = nn.Sequential(nn.SiLU(), nn.Linear(
+            hidden_size, 3 * hidden_size, bias=True))
+        self.t_block_y_temp = nn.Sequential(
+            nn.SiLU(), nn.Linear(hidden_size, 3 * hidden_size, bias=True))
         self.y_embedder = CaptionEmbedder(
             in_channels=caption_channels,
             hidden_size=hidden_size,
@@ -252,9 +273,9 @@ class MVDiT(nn.Module):
                 for i in range(self.depth)
             ]
         )
-        self.final_layer = T2IFinalLayer(hidden_size, np.prod(self.patch_size), self.out_channels)
-        
-        
+        self.final_layer = T2IFinalLayer(
+            hidden_size, np.prod(self.patch_size), self.out_channels)
+
         # init model
         self.initialize_weights()
         self.initialize_temporal()
@@ -293,13 +314,15 @@ class MVDiT(nn.Module):
 
         # embedding
         x = self.x_embedder(x)  # [B, (THW), C]
-        x = rearrange(x, "B (T S) C -> B T S C", T=self.num_temporal, S=self.num_spatial)
+        x = rearrange(x, "B (T S) C -> B T S C",
+                      T=self.num_temporal, S=self.num_spatial)
         x = x + self.pos_embed
         x = rearrange(x, "B T S C -> B (T S) C")
 
         # shard over the sequence dim if sp is enabled
         if self.enable_sequence_parallelism:
-            x = split_forward_gather_backward(x, get_sequence_parallel_group(), dim=1, grad_scale="down")
+            x = split_forward_gather_backward(
+                x, get_sequence_parallel_group(), dim=1, grad_scale="down")
 
         t = self.t_embedder(timestep, dtype=x.dtype)  # [B, C]
         t0 = self.t_block(t)  # [B, C]
@@ -328,10 +351,12 @@ class MVDiT(nn.Module):
                     tpe = self.pos_embed_temporal
             else:
                 tpe = None
-            x, y = auto_grad_checkpoint(block, x, y, t0, t_y, t0_tmep, t_y_tmep, mask, tpe)
+            x, y = auto_grad_checkpoint(
+                block, x, y, t0, t_y, t0_tmep, t_y_tmep, mask, tpe)
 
         if self.enable_sequence_parallelism:
-            x = gather_forward_split_backward(x, get_sequence_parallel_group(), dim=1, grad_scale="up")
+            x = gather_forward_split_backward(
+                x, get_sequence_parallel_group(), dim=1, grad_scale="up")
         # x.shape: [B, N, C]
 
         # final process
@@ -351,7 +376,8 @@ class MVDiT(nn.Module):
             x (torch.Tensor): of shape [B, C_out, T, H, W]
         """
 
-        N_t, N_h, N_w = [self.input_size[i] // self.patch_size[i] for i in range(3)]
+        N_t, N_h, N_w = [self.input_size[i] // self.patch_size[i]
+                         for i in range(3)]
         T_p, H_p, W_p = self.patch_size
         x = rearrange(
             x,
@@ -381,10 +407,12 @@ class MVDiT(nn.Module):
             grid_size = self.input_size[1:]
         pos_embed = get_2d_sincos_pos_embed(
             self.hidden_size,
-            (grid_size[0] // self.patch_size[1], grid_size[1] // self.patch_size[2]),
+            (grid_size[0] // self.patch_size[1],
+             grid_size[1] // self.patch_size[2]),
             scale=self.space_scale,
         )
-        pos_embed = torch.from_numpy(pos_embed).float().unsqueeze(0).requires_grad_(False)
+        pos_embed = torch.from_numpy(
+            pos_embed).float().unsqueeze(0).requires_grad_(False)
         return pos_embed
 
     def get_temporal_pos_embed(self):
@@ -393,7 +421,8 @@ class MVDiT(nn.Module):
             self.input_size[0] // self.patch_size[0],
             scale=self.time_scale,
         )
-        pos_embed = torch.from_numpy(pos_embed).float().unsqueeze(0).requires_grad_(False)
+        pos_embed = torch.from_numpy(
+            pos_embed).float().unsqueeze(0).requires_grad_(False)
         return pos_embed
 
     def freeze_not_temporal(self):
@@ -405,7 +434,7 @@ class MVDiT(nn.Module):
         for n, p in self.named_parameters():
             if "cross_attn" in n:
                 p.requires_grad = False
-    
+
     def freeze_not_attn(self):
         for n, p in self.named_parameters():
             if "attn" not in n:
@@ -414,9 +443,10 @@ class MVDiT(nn.Module):
                 p.requires_grad = False
 
     def initialize_temporal(self):
-        for block in self.blocks:
-            nn.init.constant_(block.attn_temp.proj.weight, 0)
-            nn.init.constant_(block.attn_temp.proj.bias, 0)
+        pass
+        # for block in self.blocks:
+        #     nn.init.constant_(block.attn_temp.proj.weight, 0)
+        #     nn.init.constant_(block.attn_temp.proj.bias, 0)
 
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -445,18 +475,19 @@ class MVDiT(nn.Module):
         nn.init.normal_(self.y_embedder.y_proj.fc2.weight, std=0.02)
 
         # Zero-out adaLN modulation layers in PixArt blocks:
-        for block in self.blocks:
-            nn.init.constant_(block.cross_attn.proj.weight, 0)
-            nn.init.constant_(block.cross_attn.proj.bias, 0)
+        # for block in self.blocks:
+        #     nn.init.constant_(block.cross_attn.proj.weight, 0)
+        #     nn.init.constant_(block.cross_attn.proj.bias, 0)
 
         # Zero-out output layers:
-        nn.init.constant_(self.final_layer.linear.weight, 0)
-        nn.init.constant_(self.final_layer.linear.bias, 0)
+        # nn.init.constant_(self.final_layer.linear.weight, 0)
+        # nn.init.constant_(self.final_layer.linear.bias, 0)
 
 
 @MODELS.register_module("MVDiT-XL/2")
 def MVDiT_XL_2(from_pretrained=None, **kwargs):
-    model = MVDiT(depth=28, hidden_size=1152, patch_size=(1, 2, 2), num_heads=16, **kwargs)
+    model = MVDiT(depth=28, hidden_size=1152, patch_size=(
+        1, 2, 2), num_heads=16, **kwargs)
     if from_pretrained is not None:
         load_checkpoint(model, from_pretrained)
     return model
