@@ -454,15 +454,28 @@ class MaskedMultiHeadCrossAttention(nn.Module):
             attn_bias = mask.unsqueeze(1).unsqueeze(1).repeat(
                 1, self.num_heads, S, 1).to(q.dtype)  # B H S L
             exp = -1e9
-            attn_bias.masked_fill_(attn_bias == 0, exp)
-            attn_bias.masked_fill_(attn_bias == 1, 0)
+            attn_bias = attn_bias.masked_fill(attn_bias == 0, exp)
+            attn_bias = attn_bias.masked_fill(attn_bias == 1, 0)
             # attn_bias[attn_bias == 0] = exp
             # attn_bias[attn_bias == 1] = 0
         # x = xformers.ops.memory_efficient_attention(
         #     q, k, v, p=self.attn_drop.p, attn_bias=attn_bias)
 
-        x = memory_efficient_attention_replacement_with_attn_bias(
-            q, k, v, attn_bias=attn_bias, dropout_p=self.attn_drop.p)
+        # x = memory_efficient_attention_replacement_with_attn_bias(
+        #     q, k, v, attn_bias=attn_bias, dropout_p=self.attn_drop.p)
+
+        scale = 1.0 / q.shape[-1] ** 0.5
+        q = q * scale
+        q = q.transpose(1, 2)
+        k = k.transpose(1, 2)
+        v = v.transpose(1, 2)
+        attn = q @ v.transpose(-2, -1)
+        if attn_bias is not None:
+            attn = attn + attn_bias
+        attn = attn.softmax(-1)
+        attn = F.dropout(attn, self.attn_drop.p)
+        attn = attn @ v
+        x = attn.transpose(1, 2)
 
         x = x.view(B, -1, C)
         x = self.proj(x)
