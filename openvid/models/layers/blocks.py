@@ -477,7 +477,8 @@ class MaskedMultiHeadCrossAttention(nn.Module):
         attn = attn @ v
         x = attn.transpose(1, 2)
 
-        x = x.contiguous()
+        if x.device.type == 'cuda':
+            x = x.contiguous()
 
         x = x.view(B, -1, C)
         x = self.proj(x)
