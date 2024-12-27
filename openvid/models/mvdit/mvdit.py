@@ -443,10 +443,9 @@ class MVDiT(nn.Module):
                 p.requires_grad = False
 
     def initialize_temporal(self):
-        pass
-        # for block in self.blocks:
-        #     nn.init.constant_(block.attn_temp.proj.weight, 0)
-        #     nn.init.constant_(block.attn_temp.proj.bias, 0)
+        for block in self.blocks:
+            nn.init.constant_(block.attn_temp.proj.weight, 0)
+            nn.init.constant_(block.attn_temp.proj.bias, 0)
 
     def initialize_weights(self):
         # Initialize transformer layers:
@@ -475,13 +474,13 @@ class MVDiT(nn.Module):
         nn.init.normal_(self.y_embedder.y_proj.fc2.weight, std=0.02)
 
         # Zero-out adaLN modulation layers in PixArt blocks:
-        # for block in self.blocks:
-        #     nn.init.constant_(block.cross_attn.proj.weight, 0)
-        #     nn.init.constant_(block.cross_attn.proj.bias, 0)
+        for block in self.blocks:
+            nn.init.constant_(block.cross_attn.proj.weight, 0)
+            nn.init.constant_(block.cross_attn.proj.bias, 0)
 
         # Zero-out output layers:
-        # nn.init.constant_(self.final_layer.linear.weight, 0)
-        # nn.init.constant_(self.final_layer.linear.bias, 0)
+        nn.init.constant_(self.final_layer.linear.weight, 0)
+        nn.init.constant_(self.final_layer.linear.bias, 0)
 
 
 @MODELS.register_module("MVDiT-XL/2")
