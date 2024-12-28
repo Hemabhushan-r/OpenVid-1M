@@ -802,8 +802,9 @@ class GaussianDiffusion:
                 ModelMeanType.EPSILON: noise,  # here
             }[self.model_mean_type]
 
-            if model.device.type == 'cuda':
-                assert model_output.shape == target.shape == x_start.shape
+            print(
+                f'Shapes model_output.shape {model_output.shape} target.shape {target.shape} x_start.shape {x_start.shape}')
+            assert model_output.shape == target.shape == x_start.shape
             # terms["mse"] = mean_flat((target - model_output) ** 2)
             terms["mse"] = F.mse_loss(model_output, target)
             # ipdb.set_trace()
