@@ -420,6 +420,10 @@ class MultiHeadCrossAttention(nn.Module):
         #     q, k, v, attn_mask=mask, dropout_p=self.attn_drop.p)
         # ipdb.set_trace()
         if mask is not None:
+            seq_len = cond.shape[1]
+            temp_list = [
+                [1 if i < j else 0 for i in range(seq_len)] for j in mask]
+            mask = torch.tensor(temp_list, device=x.device, dtype=x.dtype)
             attn_bias = mask.unsqueeze(1).unsqueeze(1).repeat(
                 1, self.num_heads, N, 1).to(q.dtype)  # B H S L
             exp = -1e9
