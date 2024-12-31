@@ -443,6 +443,8 @@ class MultiHeadCrossAttention(nn.Module):
         k = k.transpose(1, 2)
         v = v.transpose(1, 2)
         attn = q @ v.transpose(-2, -1)
+
+        print(f'Shape Info - attn {attn.shape} attn_bias {attn_bias.shape}')
         if attn_bias is not None:
             attn = attn + attn_bias
         attn = attn.softmax(-1)
