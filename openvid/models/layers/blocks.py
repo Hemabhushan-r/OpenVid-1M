@@ -402,9 +402,10 @@ class MultiHeadCrossAttention(nn.Module):
     def forward(self, x, cond, mask=None):
         # query/value: img tokens; key: condition; mask: if padding tokens
         B, N, C = x.shape
+        L = cond.shape[1]
 
-        q = self.q_linear(x).view(1, -1, self.num_heads, self.head_dim)
-        kv = self.kv_linear(cond).view(1, -1, 2, self.num_heads, self.head_dim)
+        q = self.q_linear(x).view(B, N, self.num_heads, self.head_dim)
+        kv = self.kv_linear(cond).view(B, L, 2, self.num_heads, self.head_dim)
         k, v = kv.unbind(2)
 
         # ipdb.set_trace()
@@ -444,7 +445,7 @@ class MultiHeadCrossAttention(nn.Module):
         v = v.transpose(1, 2)
         attn = q @ v.transpose(-2, -1)
 
-        print(f'Shape Info - attn {attn.shape} attn_bias {attn_bias.shape}')
+        # print(f'Shape Info - attn {attn.shape} attn_bias {attn_bias.shape}')
         if attn_bias is not None:
             attn = attn + attn_bias
         attn = attn.softmax(-1)
