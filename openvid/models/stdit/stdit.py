@@ -207,8 +207,8 @@ class STDiT(nn.Module):
             hidden_size, np.prod(self.patch_size), self.out_channels)
 
         # init model
-        self.initialize_weights()
-        self.initialize_temporal()
+        # self.initialize_weights()
+        # self.initialize_temporal()
         if freeze is not None:
             assert freeze in ["not_temporal", "text"]
             if freeze == "not_temporal":
