@@ -428,7 +428,7 @@ class MultiHeadCrossAttention(nn.Module):
             attn_bias = mask.unsqueeze(1).unsqueeze(1).repeat(
                 1, self.num_heads, N, 1).to(q.dtype)  # B H S L
             exp = -1e9
-            attn_bias = attn_bias.masked_fill(attn_bias == 0, exp)
+            attn_bias = attn_bias.masked_fill(attn_bias == 0, float('-inf'))
             attn_bias = attn_bias.masked_fill(attn_bias == 1, 0)
             # attn_bias[attn_bias == 0] = exp
             # attn_bias[attn_bias == 1] = 0
@@ -491,7 +491,7 @@ class MaskedMultiHeadCrossAttention(nn.Module):
             attn_bias = mask.unsqueeze(1).unsqueeze(1).repeat(
                 1, self.num_heads, S, 1).to(q.dtype)  # B H S L
             exp = -1e9
-            attn_bias = attn_bias.masked_fill(attn_bias == 0, exp)
+            attn_bias = attn_bias.masked_fill(attn_bias == 0, float('-inf'))
             attn_bias = attn_bias.masked_fill(attn_bias == 1, 0)
             # attn_bias[attn_bias == 0] = exp
             # attn_bias[attn_bias == 1] = 0
